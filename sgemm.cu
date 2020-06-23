@@ -1,4 +1,4 @@
-//nvcc --shared -Xcompiler -fPIC -Xptxas --verbose -arch=sm_60 sgemm.cu -o sgemm.so
+//nvcc --shared -Xcompiler -fPIC -Xptxas -O3,--verbose -arch=sm_60 sgemm.cu -o sgemm.so
 #ifndef blockDim_X_half
  #define blockDim_X_half 16
 #endif
@@ -44,38 +44,45 @@ void __global__ sgemm_kernel(const float alpha, const float beta, const int LDA,
   const int update_l2_cond_b_lhs = Rowmajor_B ? blockDim_X : 0;
   const int shared_a_wrptr_update = Rowmajor_A ? 1 : share_ld_dim;
   const int shared_b_wrptr_update = Rowmajor_B ? share_ld_dim : 2;
-  float *shared_a_wrptr, *shared_b_wrptr;
   for(int k_pos=0; k_pos<K; k_pos+=blockDim_X){
     load_cond = (load_cond_a_lhs<0);
+    if(load_cond && l2_cond_a_lhs<=-blockDim_X){
 #pragma unroll
-    for(int ll=0; ll<blockDim_X; ll++){
-      if(l2_cond_a_lhs+ll<0 && load_cond) a2[ll].x = *a_ptr;
-      else a2[ll].x = 0.0;
-      a_ptr += LDA;
+      for(int ll=0; ll<blockDim_X; ll++){
+        a2[ll].x = *a_ptr; a_ptr += LDA;
+      }
+    }else{
+#pragma unroll
+      for(int ll=0; ll<blockDim_X; ll++){
+        if(l2_cond_a_lhs+ll<0 && load_cond) a2[ll].x = *a_ptr;
+        else a2[ll].x = 0.0;
+        a_ptr += LDA;
+      }
     }
     a_ptr += a_ptr_inc_last;
     load_cond_a_lhs += update_load_cond_a_lhs; l2_cond_a_lhs += update_l2_cond_a_lhs;
     load_cond = (load_cond_b_lhs<0);
+    if(load_cond && l2_cond_b_lhs<=-blockDim_X){
 #pragma unroll
-    for(int ll=0; ll<blockDim_X; ll++){
-      if(l2_cond_b_lhs+ll<0 && load_cond) a2[ll].y = *b_ptr;
-      else a2[ll].y = 0.0;
-      b_ptr += LDB;
+      for(int ll=0; ll<blockDim_X; ll++){
+        a2[ll].y = *b_ptr; b_ptr += LDB;
+      }
+    }else{
+#pragma unroll
+      for(int ll=0; ll<blockDim_X; ll++){
+        if(l2_cond_b_lhs+ll<0 && load_cond) a2[ll].y = *b_ptr;
+        else a2[ll].y = 0.0;
+        b_ptr += LDB;
+      }
     }
     b_ptr += b_ptr_inc_last;
     load_cond_b_lhs += update_load_cond_b_lhs; l2_cond_b_lhs += update_l2_cond_b_lhs;
-    shared_a_wrptr = share_a_write;
 #pragma unroll
-    for(int ll=0; ll<blockDim_X; ll++){
-      *shared_a_wrptr = a2[ll].x; shared_a_wrptr += shared_a_wrptr_update;
-    }
-    shared_b_wrptr = share_b_write;
+    for(int ll=0; ll<blockDim_X; ll++) share_a_write[ll*shared_a_wrptr_update] = a2[ll].x;
 #pragma unroll
-    for(int ll=0; ll<blockDim_X; ll++){
-      *shared_b_wrptr = a2[ll].y; shared_b_wrptr += shared_b_wrptr_update;
-    }
+    for(int ll=0; ll<blockDim_X; ll++) share_b_write[ll*shared_b_wrptr_update] = a2[ll].y;
     __syncthreads();
-#pragma unroll 1
+#pragma unroll 2
     for(int ll=0; ll<blockDim_X; ll++){
 #pragma unroll
       for(int i=0; i<blockDim_Y_half; i++)  b2[i] = sb[ll*(share_ld_dim/2)+i*blockDim_X];
