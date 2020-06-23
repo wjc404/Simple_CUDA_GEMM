@@ -1,9 +1,9 @@
 //nvcc --shared -Xcompiler -fPIC -Xptxas -O3,--verbose -arch=sm_60 sgemm.cu -o sgemm.so
 #ifndef blockDim_X_half
- #define blockDim_X_half 16
+ #define blockDim_X_half 16 //for Kepler GPUs please set this to 8
 #endif
 #ifndef blockDim_Y_half
- #define blockDim_Y_half 2
+ #define blockDim_Y_half 2 //for Kepler GPUs please set this to 4
 #endif
 #define blockDim_X (blockDim_X_half*2)
 #define blockDim_Y (blockDim_Y_half*2)
