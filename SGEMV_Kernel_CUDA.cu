@@ -61,9 +61,10 @@ __global__ void gemv2_kernel_general(const float * __restrict__ A_vec0,
       a_cache[k_pos2] = A_vec[k_pos2 + k_pos1];
     }
     __syncthreads();
+    k_upper = (k_inc1 > 3 * blockDim.x) ? (k_inc1 - 3 * blockDim.x) : 0;
     for (n_pos = n_start; n_pos < n_end; ++n_pos) {
       B_ptr = B_mat + n_pos * K + k_pos1 + threadIdx.x; c0 = 0.0f;
-      a_ptr = a_cache + threadIdx.x; k_upper = k_inc1 - 3 * blockDim.x;
+      a_ptr = a_cache + threadIdx.x;
       for (k_pos2 = threadIdx.x; k_pos2 < k_upper; k_pos2 += blockDim.x * 4) {
         a0 = *a_ptr; a_ptr += blockDim.x;
         b0 = *B_ptr; B_ptr += blockDim.x;
@@ -139,7 +140,8 @@ __host__ void gemv1_kernel_general_h(const float * __restrict__ A_vec,
 __host__ void gemv2_kernel_general_h(const float * __restrict__ A_vec,
   const float * __restrict__ B_mat, float * __restrict__ C_vec,
   unsigned int N, unsigned int K) { // matrix B column-major
-  unsigned int n_pos, k_pos, k_upper; k_upper = K - 3;
+  unsigned int n_pos, k_pos, k_upper;
+  k_upper = (K > 3) ? (K - 3) : 0;
   float c0; const float *B_ptr;
   for (n_pos = 0; n_pos < N; ++n_pos) {
     c0 = 0.0f; B_ptr = B_mat + n_pos * K;
